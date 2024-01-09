@@ -14,7 +14,7 @@ import mlx.optimizers as optim
 import numpy as np
 from mlx.utils import tree_flatten, tree_unflatten
 from phi2 import LoRALinear, ModelArgs, Phi2
-from sentencepiece import SentencePieceProcessor
+from transformers import AutoTokenizer
 
 
 def build_parser():
@@ -112,34 +112,6 @@ def build_parser():
     return parser
 
 
-class Tokenizer:
-    def __init__(self, model_path: str):
-        assert Path(model_path).exists(), model_path
-        self._model = SentencePieceProcessor(model_file=model_path)
-        self._sep = "▁"
-        assert self._model.vocab_size() == self._model.get_piece_size()
-
-    def encode(self, s: str, eos: bool = False) -> List[int]:
-        toks = [self._model.bos_id(), *self._model.encode(s)]
-        if eos:
-            toks.append(self.eos_id)
-        return toks
-
-    @property
-    def eos_id(self) -> int:
-        return self._model.eos_id()
-
-    def decode(self, t: List[int]) -> str:
-        out = self._model.decode(t)
-        if t and self._model.id_to_piece(t[0])[0] == self._sep:
-            return " " + out
-        return out
-
-    @property
-    def vocab_size(self) -> int:
-        return self._model.vocab_size()
-
-
 class Dataset:
     """
     Light-weight wrapper to hold lines from a jsonl file
@@ -204,7 +176,7 @@ def iterate_batches(dset, tokenizer, batch_size, train=False):
         for i in range(0, len(indices) - batch_size + 1, batch_size):
             # Encode batch
             batch = [
-                tokenizer.encode(dset[indices[i + j]], eos=True)
+                tokenizer.encode(dset[indices[i + j]])
                 for j in range(batch_size)
             ]
             lengths = [len(x) for x in batch]
@@ -334,7 +306,8 @@ def generate(model, prompt, tokenizer, args):
 def load_model(folder: str):
     import glob
     model_path = Path(folder)
-    tokenizer = Tokenizer(str(model_path / "tokenizer.model"))
+    #tokenizer = Tokenizer(str(model_path / "tokenizer.model"))
+    tokenizer = AutoTokenizer.from_pretrained("microsoft/phi-2")
     with open(model_path / "config.json", "r") as f:
         config = json.loads(f.read())
         quantization = config.get("quantization", None)
